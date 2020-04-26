@@ -1,5 +1,3 @@
-import logging
-
 from flask_cors import CORS
 from flask import Flask, request, jsonify
 
@@ -8,7 +6,6 @@ from util.constants import convert_txt_vmstat_to_dict
 
 APP = Flask(__name__)
 CORS(APP)
-LOG = logging.getLogger(__name__)
 
 
 @APP.route('/')
