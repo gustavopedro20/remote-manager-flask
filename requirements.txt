@@ -1,2 +1,6 @@
 Flask~=1.1.1
 paramiko~=2.7.1
+Flask-Cors==3.0.8
+coloredlogs==14.0
+humanfriendly==8.2
+pyreadline==2.1
