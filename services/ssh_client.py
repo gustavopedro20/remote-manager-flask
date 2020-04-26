@@ -40,6 +40,7 @@ class SSHClient:
         ftp_client = self.client.open_sftp()
         ftp_client.get(remote_path, LOCAL_FILE_PATH)
         ftp_client.close()
+        self.client.exec_command(f'rm -rf {remote_path}')
 
     def get_cpu_statistics(self):
         self.client.exec_command(VMSTAT)

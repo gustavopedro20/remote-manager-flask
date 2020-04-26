@@ -24,3 +24,5 @@ htmlcov/
 .coverage
 .coverage.*
 *,cover
+
+local_path.txt
