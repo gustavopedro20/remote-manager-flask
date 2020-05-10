@@ -18,15 +18,32 @@ def commands():
     ssh = SSHClient()
     response = ssh.run(request.args['command'])
     ssh.disconnect()
-    return jsonify(response), 200
+    return jsonify(response.strip().decode()), 200
 
 
-@APP.route('/cpu/statistics', methods=['GET'])
+@APP.route('/swap/statistics', methods=['GET'])
 def get_cpu_statistics():
     ssh = SSHClient()
-    local_path = ssh.get_cpu_statistics()
+    local_path = ssh.get_swap_statistics()
     ssh.disconnect()
     return jsonify(convert_txt_vmstat_to_dict(local_path)), 200
+
+
+@APP.route('/tasks', methods=['GET'])
+def get_all_tasks():
+    ssh = SSHClient()
+    tasks = ssh.get_all_tasks()
+    ssh.disconnect()
+    return jsonify(tasks), 200
+
+
+@APP.route('/tasks', methods=['DELETE'])
+def delete_task():
+    pid = request.args['pid']
+    ssh = SSHClient()
+    ssh.kill_task(pid)
+    ssh.disconnect()
+    return 204
 
 
 if __name__ == "__main__":

@@ -3,11 +3,10 @@ import paramiko
 
 from util.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 
-IP = '192.168.87.129'
+IP = '192.168.1.9'
 PORT = '22'
 USERNAME = 'gustavo'
 PASSWORD = '130896'
-VMSTAT = f'vmstat > {REMOTE_FILE_NAME}'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -42,12 +41,39 @@ class SSHClient:
         ftp_client.close()
         self.client.exec_command(f'rm -rf {remote_path}')
 
-    def get_cpu_statistics(self):
-        self.client.exec_command(VMSTAT)
+    def get_swap_statistics(self):
+        self.client.exec_command(f'vmstat > {REMOTE_FILE_NAME}')
         pwd = self.get_remote_current_path()
         remote_path = f'{pwd}/{REMOTE_FILE_NAME}'
         self.get_file_with_sftp(remote_path)
         return LOCAL_FILE_PATH
+
+    def get_all_tasks(self):
+        tasks = self.run('top -n 1 -b').decode("utf-8")
+        file = open('text.txt', 'w+')
+        file.write(tasks)
+        file.close()
+        file = open('text.txt', 'r')
+        lines = file.readlines()
+        file.close()
+        label = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', '%CPU', '%MEM', 'TIME+', 'COMMAND']
+        new_list = []
+        for i, line in enumerate(lines):
+            if i > 6:
+                dic = {}
+                data = [x.replace('\n', '') for x in line.split(' ') if x.strip() != '']
+                if len(data) == 13:
+                    s = data[11] + ' ' + data[12]
+                    data.pop()
+                    data.pop()
+                    data.append(s)
+                for j, value in enumerate(data):
+                    dic[label[j]] = value
+                new_list.append(dic)
+        return new_list
+
+    def kill_task(self, pid):
+        return self.run(f'kill {pid}')
 
     def disconnect(self):
         self.client.close()
