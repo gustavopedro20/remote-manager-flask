@@ -56,7 +56,7 @@ class SSHClient:
         file = open('text.txt', 'r')
         lines = file.readlines()
         file.close()
-        label = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', '%CPU', '%MEM', 'TIME+', 'COMMAND']
+        label = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
         new_list = []
         for i, line in enumerate(lines):
             if i > 6:

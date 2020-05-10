@@ -43,7 +43,7 @@ def delete_task():
     ssh = SSHClient()
     ssh.kill_task(pid)
     ssh.disconnect()
-    return 204
+    return jsonify(), 204
 
 
 if __name__ == "__main__":
