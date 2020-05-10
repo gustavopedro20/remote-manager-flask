@@ -1,5 +1,6 @@
 import logging
 import paramiko
+import re
 
 from util.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 
@@ -7,6 +8,8 @@ IP = '192.168.1.9'
 PORT = '22'
 USERNAME = 'gustavo'
 PASSWORD = '130896'
+TASK_LABEL = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
+MEN_LABEL = ['total', 'free', 'used', 'buff/cache']
 
 logging.basicConfig(level=logging.INFO)
 
@@ -48,7 +51,7 @@ class SSHClient:
         self.get_file_with_sftp(remote_path)
         return LOCAL_FILE_PATH
 
-    def get_all_tasks(self):
+    def get_all_tasks_and_men_statistics(self):
         tasks = self.run('top -n 1 -b').decode("utf-8")
         file = open('text.txt', 'w+')
         file.write(tasks)
@@ -56,9 +59,15 @@ class SSHClient:
         file = open('text.txt', 'r')
         lines = file.readlines()
         file.close()
-        label = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
-        new_list = []
+        men_dic = {}
+        task_list = []
         for i, line in enumerate(lines):
+            # get men usage
+            if i == 3:
+                men = [int(x) for x in line.split(' ') if (re.match('([0-9])', x))]
+                for k, value in enumerate(men):
+                    men_dic[MEN_LABEL[k]] = value
+            # get tasks
             if i > 6:
                 dic = {}
                 data = [x.replace('\n', '') for x in line.split(' ') if x.strip() != '']
@@ -68,9 +77,9 @@ class SSHClient:
                     data.pop()
                     data.append(s)
                 for j, value in enumerate(data):
-                    dic[label[j]] = value
-                new_list.append(dic)
-        return new_list
+                    dic[TASK_LABEL[j]] = value
+                task_list.append(dic)
+        return task_list, men_dic
 
     def kill_task(self, pid):
         return self.run(f'kill {pid}')

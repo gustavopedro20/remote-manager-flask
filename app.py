@@ -32,9 +32,9 @@ def get_cpu_statistics():
 @APP.route('/tasks', methods=['GET'])
 def get_all_tasks():
     ssh = SSHClient()
-    tasks = ssh.get_all_tasks()
+    tasks, men_statistics = ssh.get_all_tasks_and_men_statistics()
     ssh.disconnect()
-    return jsonify(tasks), 200
+    return jsonify({'tasks': tasks, 'men': men_statistics}), 200
 
 
 @APP.route('/tasks', methods=['DELETE'])
