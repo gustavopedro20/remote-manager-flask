@@ -1,13 +1,21 @@
 import logging
 import paramiko
+import socket
 import re
 
 from util.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 
-IP = '192.168.1.9'
+IP = '172.16.157.129'
 PORT = '22'
-USERNAME = 'gustavo'
-PASSWORD = '130896'
+USERNAME = 'luis'
+PASSWORD = 'chave' 
+
+#Gustavo
+
+# IP = '192.168.1.9'
+# PORT = '22'
+# USERNAME = 'gustavo'
+# PASSWORD = '130896'
 TASK_LABEL = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
 MEN_LABEL = ['total', 'free', 'used', 'buff/cache']
 
