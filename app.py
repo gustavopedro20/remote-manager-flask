@@ -1,6 +1,7 @@
 from flask_cors import CORS
 from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO, join_room, emit, Namespace
+# from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy import SQLAlchemy
 import time
 
@@ -15,6 +16,7 @@ db = SQLAlchemy(APP)
 CORS(APP)
 socketio = SocketIO(APP, cors_allowed_origins="*")
 
+
 class Machine(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     ip = db.Column(db.String(200), nullable=False)
@@ -25,35 +27,37 @@ class Machine(db.Model):
 
     @property
     def serialize(self):
-       """Return object data in easily serializable format"""
-       return {
-           'id'         : self.id,
-           'ip'         : self.ip,
-           'hostname'   : self.hostname,
-           'port'       : self.port,
-           'password'   : self.password
-       }
+        return {
+            'id': self.id,
+            'ip': self.ip,
+            'hostname': self.hostname,
+            'port': self.port,
+            'password': self.password,
+            'system': self.system
+        }
 
     def __repr__(self):
-        return '<Machine %r' %self.id
+        return '<Machine %r' % self.id
+
 
 @APP.route('/api/machines', methods=['POST'])
 def create_machine():
     data = request.get_json()
-    print(" oi eu sou seu cu",data)
-    new_machine = Machine(ip = data['ip'],
-                            hostname = data['hostname'],
-                            password = data['password'],
-                            port = data['port'],
-                            system = data['system'])
+    print(" oi eu sou seu cu", data)
+    new_machine = Machine(ip=data['ip'],
+                          hostname=data['hostname'],
+                          password=data['password'],
+                          port=data['port'],
+                          system=data['system'])
     try:
         db.session.add(new_machine)
         db.session.commit()
-        return jsonify()
+        return jsonify(), 201
     except:
-        return 'Teve algum erro ao criar'
+        return jsonify('Teve algum erro ao criar'), 500
 
-@APP.route('/api/machines', methods = ['GET'])
+
+@APP.route('/api/machines', methods=['GET'])
 def list_machines():
     tasks = Machine.query.all()
     return jsonify([i.serialize for i in tasks])
@@ -63,27 +67,27 @@ def list_machines():
 def delete(id):
     task_to_delete = Machine.query.get_or_404(id)
 
-    try: 
+    try:
         db.session.delete(task_to_delete)
         db.session.commit()
-        return jsonify()
+        return jsonify(), 204
     except:
         return 'Tivemos problema para excluir essa task'
 
 
 @APP.route('/api/machines', methods=['PUT'])
 def update():
-    machine = Machine.query.get(request.json.get('id', machine.id))
-    machine.ip = request.json.get('ip', machine.ip)
-    machine.hostname = request.json.get('hostname', machine.hostname)
-    machine.port = request.json.get('port', machine.port)
-    machine.system = request.json.get('system', machine.system)
-    machine.password = request.json.get('password', machine.password)
+    machine = Machine.query.get(request.json.get('id'))
+    machine.ip = request.json.get('ip')
+    machine.hostname = request.json.get('hostname')
+    machine.port = request.json.get('port')
+    machine.system = request.json.get('system')
+    machine.password = request.json.get('password')
 
     db.session.commit()
 
-    return jsonify()
-    
+    return jsonify(), 200
+
 
 @APP.route('/')
 def index():
