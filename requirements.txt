@@ -4,3 +4,4 @@ Flask-Cors==3.0.8
 coloredlogs==14.0
 humanfriendly==8.2
 pyreadline==2.1
+Flask-SocketIO==4.3.0

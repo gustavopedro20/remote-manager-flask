@@ -4,14 +4,23 @@ import re
 
 from util.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 
-IP = '192.168.1.9'
+IP = '192.168.87.130'
 PORT = '22'
 USERNAME = 'gustavo'
 PASSWORD = '130896'
 TASK_LABEL = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
 MEN_LABEL = ['total', 'free', 'used', 'buff/cache']
+DISC_LABEL = ['total', 'usage', 'free', 'usage_per_cent']
 
 logging.basicConfig(level=logging.INFO)
+
+
+def write_file_and_return_all_lines(value):
+    file = open('text.txt', 'w+')
+    file.write(value)
+    file.close()
+    file = open('text.txt', 'r')
+    return file.readlines()
 
 
 class SSHClient:
@@ -53,12 +62,7 @@ class SSHClient:
 
     def get_all_tasks_and_men_statistics(self):
         tasks = self.run('top -n 1 -b').decode("utf-8")
-        file = open('text.txt', 'w+')
-        file.write(tasks)
-        file.close()
-        file = open('text.txt', 'r')
-        lines = file.readlines()
-        file.close()
+        lines = write_file_and_return_all_lines(tasks)
         men_dic = {}
         task_list = []
         for i, line in enumerate(lines):
@@ -83,6 +87,20 @@ class SSHClient:
 
     def kill_task(self, pid):
         return self.run(f'kill {pid}')
+
+    def get_disc_usage(self):
+        disc_usage = self.run('df').decode("utf-8")
+        test = write_file_and_return_all_lines(disc_usage)
+        arr = [0, 0, 0, 0]
+        dic = {}
+        for i, value in enumerate(test):
+            if i > 0:
+                s = [int(x.replace('%', '')) for x in value.split(' ') if x.strip() != '' and (re.match('([0-9])', x))]
+                for j, v in enumerate(s):
+                    arr[j] += v
+        for k, x in enumerate(arr):
+            dic[DISC_LABEL[k]] = x
+        return dic
 
     def disconnect(self):
         self.client.close()
