@@ -1,92 +1,18 @@
 from flask_cors import CORS
-from flask import Flask, request, jsonify, render_template
-from flask_socketio import SocketIO, join_room, emit, Namespace
-# from flask_sqlalchemy import SQLAlchemy
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, jsonify
+from flask_socketio import SocketIO, emit
 import time
 
-from services.ssh_client import SSHClient
-from util.constants import convert_txt_vmstat_to_dict
+from mod_machine.models import db, Machine
+from mod_machine.services import SSHClient
+from mod_machine.utils.constants import convert_txt_vmstat_to_dict
 
 APP = Flask(__name__)
+CORS(APP)
+db.init_app(APP)
 APP.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 APP.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///machine.db'
-db = SQLAlchemy(APP)
-
-CORS(APP)
 socketio = SocketIO(APP, cors_allowed_origins="*")
-
-
-class Machine(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    ip = db.Column(db.String(200), nullable=False)
-    hostname = db.Column(db.String(200), nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    port = db.Column(db.String(200), nullable=False)
-    system = db.Column(db.String(200), nullable=False)
-
-    @property
-    def serialize(self):
-        return {
-            'id': self.id,
-            'ip': self.ip,
-            'hostname': self.hostname,
-            'port': self.port,
-            'password': self.password,
-            'system': self.system
-        }
-
-    def __repr__(self):
-        return '<Machine %r' % self.id
-
-
-@APP.route('/api/machines', methods=['POST'])
-def create_machine():
-    data = request.get_json()
-    print(" oi eu sou seu cu", data)
-    new_machine = Machine(ip=data['ip'],
-                          hostname=data['hostname'],
-                          password=data['password'],
-                          port=data['port'],
-                          system=data['system'])
-    try:
-        db.session.add(new_machine)
-        db.session.commit()
-        return jsonify(), 201
-    except:
-        return jsonify('Teve algum erro ao criar'), 500
-
-
-@APP.route('/api/machines', methods=['GET'])
-def list_machines():
-    tasks = Machine.query.all()
-    return jsonify([i.serialize for i in tasks])
-
-
-@APP.route('/api/machines/<int:id>', methods=['DELETE'])
-def delete(id):
-    task_to_delete = Machine.query.get_or_404(id)
-
-    try:
-        db.session.delete(task_to_delete)
-        db.session.commit()
-        return jsonify(), 204
-    except:
-        return 'Tivemos problema para excluir essa task'
-
-
-@APP.route('/api/machines', methods=['PUT'])
-def update():
-    machine = Machine.query.get(request.json.get('id'))
-    machine.ip = request.json.get('ip')
-    machine.hostname = request.json.get('hostname')
-    machine.port = request.json.get('port')
-    machine.system = request.json.get('system')
-    machine.password = request.json.get('password')
-
-    db.session.commit()
-
-    return jsonify(), 200
 
 
 @APP.route('/')
@@ -135,13 +61,10 @@ def get_disk_usage():
     return jsonify(v), 200
 
 
-@socketio.on('create')
-def on_create(data):
-    # join_room(1)
+@socketio.on('tasks')
+def socket_tasks(data):
     try:
         ssh = SSHClient()
-        # task_list, men_dic = ssh.get_all_tasks_and_men_statistics()
-        # emit('join_room', {'tasks': task_list, 'men': men_dic}, broadcast=True)
         while True:
             task_list, men_dic = ssh.get_all_tasks_and_men_statistics()
             disk_usage = ssh.get_disc_usage()
@@ -153,7 +76,71 @@ def on_create(data):
             emit('join_room', response, broadcast=True)
             time.sleep(15)
     except Exception as e:
-        emit("join_room", {'error': f"Cant't connect to the server: {e.__cause__}"}, broadcast=True)
+        response = {
+            'error': f'Cant not connect to the server: {e.__cause__}',
+            'status': 500
+        }
+        emit('join_room', response, broadcast=True)
+
+
+@APP.route('/api/machines', methods=['POST'])
+def create_machine():
+    data = request.get_json()
+    new_machine = Machine(ip=data['ip'],
+                          hostname=data['hostname'],
+                          password=data['password'],
+                          port=data['port'],
+                          system=data['system'])
+    try:
+        db.session.add(new_machine)
+        db.session.commit()
+        return jsonify(), 201
+    except Exception as e:
+        return jsonify({'error': e.__cause__, 'status': 500}), 500
+
+
+@APP.route('/api/machines', methods=['GET'])
+def find_all_machine():
+    tasks = Machine.query.all()
+    return jsonify([i.serialize for i in tasks])
+
+
+@APP.route('/api/machines/<int:id>', methods=['GET'])
+def find_one_machine(id):
+    machine = Machine.query.get(id)
+    if machine:
+        return jsonify(machine.serialize), 200
+    else:
+        response = {
+            'message': 'not found',
+            'status': 404,
+            'details': 'machine not found'
+        }
+        return jsonify(response), 404
+
+
+@APP.route('/api/machines/<int:id>', methods=['DELETE'])
+def delete_machine(id):
+    machine = Machine.query.get_or_404(id)
+    try:
+        db.session.delete(machine)
+        db.session.commit()
+        return jsonify(), 204
+    except Exception as e:
+        return jsonify({'error': e.__cause__, 'status': 500}), 500
+
+
+@APP.route('/api/machines', methods=['PUT'])
+def update_machine():
+    machine = Machine.query.get(request.json.get('id'))
+    machine.ip = request.json.get('ip')
+    machine.hostname = request.json.get('hostname')
+    machine.port = request.json.get('port')
+    machine.system = request.json.get('system')
+    machine.password = request.json.get('password')
+    db.session.commit()
+    response = Machine.query.get(machine.id)
+    return jsonify(response.serialize), 200
 
 
 if __name__ == '__main__':
