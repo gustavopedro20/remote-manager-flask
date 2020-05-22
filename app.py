@@ -1,6 +1,6 @@
 from flask_cors import CORS
 from flask import Flask, request, jsonify
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, send
 import time
 
 from mod_machine.models import db, Machine
@@ -62,25 +62,42 @@ def get_disk_usage():
 
 
 @socketio.on('tasks')
-def socket_tasks(data):
-    try:
-        ssh = SSHClient()
-        while True:
-            task_list, men_dic = ssh.get_all_tasks_and_men_statistics()
-            disk_usage = ssh.get_disc_usage()
+def socket_tasks(machine_id):
+    if machine_id is not None:
+        machine = Machine.query.get(machine_id)
+        if machine:
+            try:
+                ssh = SSHClient(machine.ip, machine.port, machine.username, machine.password)
+                while True:
+                    task_list, men_dic = ssh.get_all_tasks_and_men_statistics()
+                    disk_usage = ssh.get_disc_usage()
+                    response = {
+                        'tasks': task_list,
+                        'men': men_dic,
+                        'diskUsage': disk_usage
+                    }
+                    # emit('join_room', response, broadcast=True)
+                    send(response)
+                    time.sleep(15)
+            except Exception as e:
+                response = {
+                    'error': f'Cant not connect to the server: {e.__cause__}',
+                    'status': 500
+                }
+                send(response)
+        else:
             response = {
-                'tasks': task_list,
-                'men': men_dic,
-                'diskUsage': disk_usage
+                'message': 'not found',
+                'status': 404,
+                'details': 'machine not found'
             }
-            emit('join_room', response, broadcast=True)
-            time.sleep(15)
-    except Exception as e:
+            send(response)
+    else:
         response = {
-            'error': f'Cant not connect to the server: {e.__cause__}',
-            'status': 500
+            'error': 'machine id not found',
+            'status': 404
         }
-        emit('join_room', response, broadcast=True)
+        send(response)
 
 
 @APP.route('/api/machines', methods=['POST'])

@@ -6,10 +6,6 @@ import re
 from mod_machine.utils.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 
 
-IP = '192.168.1.12'
-PORT = '22'
-USERNAME = 'gustavo'
-PASSWORD = '130896'
 TASK_LABEL = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
 MEN_LABEL = ['total', 'free', 'used', 'buff/cache']
 DISC_LABEL = ['total', 'usage', 'free', 'usage_per_cent']
@@ -26,13 +22,13 @@ def write_file_and_return_all_lines(value):
 
 
 class SSHClient:
-    def __init__(self):
+    def __init__(self, ip, port, username, password):
         try:
             logging.info('Start connection...')
             client = paramiko.SSHClient()
             client.load_system_host_keys()
             client.set_missing_host_key_policy(paramiko.WarningPolicy())
-            client.connect(IP, PORT, USERNAME, PASSWORD)
+            client.connect(ip, port, username, password)
             self.client = client
             logging.info('Successful connect!')
         except Exception as e:
