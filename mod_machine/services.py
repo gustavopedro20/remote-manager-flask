@@ -68,7 +68,7 @@ class SSHClient:
             if i == 3:
                 men = [int(x) for x in line.split(' ') if (re.match('([0-9])', x))]
                 for k, value in enumerate(men):
-                    men_dic[MEN_LABEL[k]] = value
+                    men_dic[MEN_LABEL[k]] = value / 994538
             # get tasks
             if i > 6:
                 dic = {}
@@ -88,16 +88,19 @@ class SSHClient:
 
     def get_disc_usage(self):
         disc_usage = self.run('df').decode("utf-8")
-        test = write_file_and_return_all_lines(disc_usage)
+        lines = write_file_and_return_all_lines(disc_usage)
         arr = [0, 0, 0, 0]
         dic = {}
-        for i, value in enumerate(test):
+        for i, value in enumerate(lines):
             if i > 0:
                 s = [int(x.replace('%', '')) for x in value.split(' ') if x.strip() != '' and (re.match('([0-9])', x))]
                 for j, v in enumerate(s):
                     arr[j] += v
         for k, x in enumerate(arr):
-            dic[DISC_LABEL[k]] = x
+            if not DISC_LABEL[k] == DISC_LABEL[3]:
+                dic[DISC_LABEL[k]] = x / 1000000
+            else:
+                dic[DISC_LABEL[k]] = x
         return dic
 
     def disconnect(self):
