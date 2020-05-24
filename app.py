@@ -67,7 +67,8 @@ def socket_tasks(machine_id):
         machine = Machine.query.get(machine_id)
         if machine:
             try:
-                ssh = SSHClient(machine.ip, machine.port, machine.username, machine.password)
+                ssh = SSHClient(machine.serialize['ip'], machine.serialize['port'],
+                                machine.serialize['hostname'], machine.serialize['password'])
                 while True:
                     task_list, men_dic = ssh.get_all_tasks_and_men_statistics()
                     disk_usage = ssh.get_disc_usage()
