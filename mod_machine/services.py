@@ -5,7 +5,6 @@ import re
 
 from mod_machine.utils.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 
-
 TASK_LABEL = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
 MEN_LABEL = ['total', 'free', 'used', 'buff/cache']
 DISC_LABEL = ['total', 'usage', 'free', 'usage_per_cent']
@@ -62,8 +61,17 @@ class SSHClient:
         tasks = self.run('top -n 1 -b').decode("utf-8")
         lines = write_file_and_return_all_lines(tasks)
         men_dic = {}
+        cpu_usage = 0
         task_list = []
         for i, line in enumerate(lines):
+            # get cpu %
+            if i == 2:
+                try:
+                    cpu = [x for x in line.split(' ') if x.strip() if (re.match('([0-9])', x))][0]
+                    if cpu.count(',') > 0:
+                        cpu_usage = float(cpu.replace(',', '.'))
+                except:
+                    pass
             # get men usage
             if i == 3:
                 men = [int(x) for x in line.split(' ') if (re.match('([0-9])', x))]
@@ -81,7 +89,7 @@ class SSHClient:
                 for j, value in enumerate(data):
                     dic[TASK_LABEL[j]] = value
                 task_list.append(dic)
-        return task_list, men_dic
+        return task_list, men_dic, cpu_usage
 
     def kill_task(self, pid):
         return self.run(f'kill {pid}')

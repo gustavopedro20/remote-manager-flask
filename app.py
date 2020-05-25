@@ -1,6 +1,6 @@
 from flask_cors import CORS
 from flask import Flask, request, jsonify
-from flask_socketio import SocketIO, emit, send
+from flask_socketio import SocketIO, send
 import time
 
 from mod_machine.models import db, Machine
@@ -47,7 +47,10 @@ def get_all_tasks():
 @APP.route('/tasks', methods=['DELETE'])
 def delete_task():
     pid = request.args['pid']
-    ssh = SSHClient()
+    machine_id = request.args['machineId']
+    machine = Machine.query.get(machine_id)
+    ssh = SSHClient(machine.serialize['ip'], machine.serialize['port'],
+                    machine.serialize['hostname'], machine.serialize['password'])
     ssh.kill_task(pid)
     ssh.disconnect()
     return jsonify(), 204
@@ -70,12 +73,13 @@ def socket_tasks(machine_id):
                 ssh = SSHClient(machine.serialize['ip'], machine.serialize['port'],
                                 machine.serialize['hostname'], machine.serialize['password'])
                 while True:
-                    task_list, men_dic = ssh.get_all_tasks_and_men_statistics()
                     disk_usage = ssh.get_disc_usage()
+                    task_list, men_dic, cpu_usage = ssh.get_all_tasks_and_men_statistics()
                     response = {
                         'tasks': task_list,
                         'men': men_dic,
-                        'diskUsage': disk_usage
+                        'diskUsage': disk_usage,
+                        'cpuUsage': cpu_usage
                     }
                     # emit('join_room', response, broadcast=True)
                     send(response)
