@@ -1,5 +1,6 @@
 import logging
 import time
+import atexit
 from datetime import datetime
 
 from flask import Flask, request, jsonify
@@ -8,6 +9,7 @@ from flask_cors import CORS
 from flask_mail import Mail
 from flask_mail import Message
 from flask_socketio import SocketIO, send
+from apscheduler.scheduler import Scheduler
 
 from config import mail_settings, sql_setting
 from mod_machine.dto import MailDTO
@@ -23,6 +25,8 @@ mail = Mail(app)
 CORS(app)
 socket_io = SocketIO(app, cors_allowed_origins="*")
 logging.basicConfig(level=logging.INFO)
+cron = Scheduler(daemon=True)
+cron.start()
 
 
 @app.route('/')
@@ -150,47 +154,46 @@ def update_machine():
     machine.password = machine_update['password']
     config = Config.query.get(machine_update['config']['id'])
     config.email = machine_update['config']['email']
-    config.max_disc_in_percent = machine_update['config']['maxDiscInPercent']
-    config.max_men_in_percent = machine_update['config']['maxMenInPercent']
-    config.max_cpu_in_percent = machine_update['config']['maxCPUInPercent']
+    config.maxDiscInPercent = machine_update['config']['maxDiscInPercent']
+    config.maxMenInPercent = machine_update['config']['maxMenInPercent']
+    config.maxCPUInPercent = machine_update['config']['maxCPUInPercent']
     db.session.commit()
     return jsonify(machine.serialize), 200
 
 
-@app.route('/trigger', methods=['GET'])
+@cron.interval_schedule(minutes=10)
 def verify_machine_usage():
-    machines = Machine.query.all()
-    for machine in machines:
-        ssh = SSHClient(machine.ip, machine.port, machine.hostname, machine.password)
-        if ssh.is_connected():
-            task, men, cpu = ssh.get_task_men_cpu()
-            disc = ssh.get_disc_usage()
-            ssh.disconnect()
+    with app.app_context():
+        machines = Machine.query.all()
+        for machine in machines:
+            ssh = SSHClient(machine.ip, machine.port, machine.hostname, machine.password)
+            if ssh.is_connected():
+                task, men, cpu = ssh.get_task_men_cpu()
+                disc = ssh.get_disc_usage()
+                ssh.disconnect()
 
-            max_cpu = machine.config.maxCPUInPercent
-            max_men = machine.config.maxMenInPercent
-            max_disc = machine.config.maxDiscInPercent
+                max_cpu = machine.config.maxCPUInPercent
+                max_men = machine.config.maxMenInPercent
+                max_disc = machine.config.maxDiscInPercent
 
-            current_men = int((men['free'] * 100) / men['total'])
-            current_cpu = int(cpu)
-            current_disc = int(disc['usage_per_cent'])
+                current_men = int((men['free'] * 100) / men['total'])
+                current_cpu = int(cpu)
+                current_disc = int(disc['usage_per_cent'])
 
-            if current_disc > max_disc or current_men > max_men or current_cpu > max_cpu:
-                dto = MailDTO(max_cpu, max_men, max_disc, current_men, current_cpu, current_disc)
-                send_mail_from_template(
-                    f'A máquina {machine.ip} ultrapassou os limites de uso de CPU, memória ou disco estabelecidos!',
-                    machine.config.email,
-                    'machine.html',
-                    dto=dto,
-                    machine=machine
-                )
-    return '', 200
+                if current_disc > max_disc or current_men > max_men or current_cpu > max_cpu:
+                    dto = MailDTO(max_cpu, max_men, max_disc, current_men, current_cpu, current_disc)
+                    send_mail_from_template(
+                        f'A máquina {machine.ip} ultrapassou os limites de uso de CPU, memória ou disco estabelecidos!',
+                        machine.config.email,
+                        'machine.html',
+                        dto=dto,
+                        machine=machine
+                    )
 
 
 def send_mail_from_template(subject, recipient, template, **kwargs):
     with app.app_context():
         print('\n', 'send email...', '\n')
-        logging.info('Send e-mail to: {}', recipient)
         msg = Message(subject, sender=app.config['MAIL_USERNAME'], recipients=[recipient])
         msg.html = render_template(
             template,
@@ -199,6 +202,9 @@ def send_mail_from_template(subject, recipient, template, **kwargs):
             date=datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         )
         mail.send(msg)
+
+
+atexit.register(lambda: cron.shutdown(wait=False))
 
 
 if __name__ == '__main__':
