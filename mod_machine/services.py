@@ -1,6 +1,5 @@
 import logging
 import paramiko
-import socket
 import re
 
 from mod_machine.utils.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
@@ -8,6 +7,7 @@ from mod_machine.utils.constants import REMOTE_FILE_NAME, LOCAL_FILE_PATH
 TASK_LABEL = ['PID', 'USER', 'PR', 'NI', 'VIRT', 'RES', 'SHR', 'S', 'CPU', 'MEM', 'TIME', 'COMMAND']
 MEN_LABEL = ['total', 'free', 'used', 'buff/cache']
 DISC_LABEL = ['total', 'usage', 'free', 'usage_per_cent']
+NUMBER_PATTERN = '([0-9])'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,8 +29,10 @@ class SSHClient:
             client.set_missing_host_key_policy(paramiko.WarningPolicy())
             client.connect(ip, port, username, password)
             self.client = client
+            self.connect = True
             logging.info('Successful connect!')
         except Exception as e:
+            self.connect = False
             logging.error('Error try connecting ssh: ', e)
 
     def run(self, command='ls'):
@@ -57,38 +59,54 @@ class SSHClient:
         self.get_file_with_sftp(remote_path)
         return LOCAL_FILE_PATH
 
-    def get_all_tasks_and_men_statistics(self):
+    @staticmethod
+    def get_men_usage(line):
+        men_dic = {}
+        men = [int(x) for x in line.split(' ') if (re.match(NUMBER_PATTERN, x))]
+        for k, value in enumerate(men):
+            men_dic[MEN_LABEL[k]] = value / 994538
+        return men_dic
+
+    @staticmethod
+    def get_cpu_usage(line):
+        cpu = [x for x in line.split(' ') if x.strip() if (re.match(NUMBER_PATTERN, x))][0]
+        if cpu.count(',') > 0:
+            return float(cpu.replace(',', '.'))
+        return 0
+
+    @staticmethod
+    def get_task(line):
+        task = {}
+        data = [x.replace('\n', '') for x in line.split(' ') if x.strip() != '']
+
+        if data[11] == 'top' or data[11] == 'sshd':
+            return None
+
+        if len(data) == 13:
+            task_name = data[11] + ' ' + data[12]
+            del data[11: 13]
+            data.append(task_name)
+
+        for j, value in enumerate(data):
+            task[TASK_LABEL[j]] = value
+        return task
+
+    def get_task_men_cpu(self):
         tasks = self.run('top -n 1 -b').decode("utf-8")
         lines = write_file_and_return_all_lines(tasks)
         men_dic = {}
         cpu_usage = 0
         task_list = []
         for i, line in enumerate(lines):
-            # get cpu %
             if i == 2:
-                try:
-                    cpu = [x for x in line.split(' ') if x.strip() if (re.match('([0-9])', x))][0]
-                    if cpu.count(',') > 0:
-                        cpu_usage = float(cpu.replace(',', '.'))
-                except:
-                    pass
-            # get men usage
+                cpu_usage = self.get_cpu_usage(line)
             if i == 3:
-                men = [int(x) for x in line.split(' ') if (re.match('([0-9])', x))]
-                for k, value in enumerate(men):
-                    men_dic[MEN_LABEL[k]] = value / 994538
-            # get tasks
+                men_dic = self.get_men_usage(line)
             if i > 6:
-                dic = {}
-                data = [x.replace('\n', '') for x in line.split(' ') if x.strip() != '']
-                if len(data) == 13:
-                    s = data[11] + ' ' + data[12]
-                    data.pop()
-                    data.pop()
-                    data.append(s)
-                for j, value in enumerate(data):
-                    dic[TASK_LABEL[j]] = value
-                task_list.append(dic)
+                task = self.get_task(line)
+                if task is not None:
+                    task_list.append(task)
+
         return task_list, men_dic, cpu_usage
 
     def kill_task(self, pid):
@@ -101,7 +119,7 @@ class SSHClient:
         dic = {}
         for i, value in enumerate(lines):
             if i > 0:
-                s = [int(x.replace('%', '')) for x in value.split(' ') if x.strip() != '' and (re.match('([0-9])', x))]
+                s = [int(x.replace('%', '')) for x in value.split(' ') if x.strip() != '' and (re.match(NUMBER_PATTERN, x))]
                 for j, v in enumerate(s):
                     arr[j] += v
         for k, x in enumerate(arr):
@@ -110,6 +128,14 @@ class SSHClient:
             else:
                 dic[DISC_LABEL[k]] = x
         return dic
+
+    def is_connected(self):
+        if self.connect:
+            if self.client.get_transport() is not None:
+                return self.client.get_transport().is_active()
+            else:
+                return False
+        return False
 
     def disconnect(self):
         self.client.close()

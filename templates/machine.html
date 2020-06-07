@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+
+<body>
+    <h3>Dados da máquina</h3>
+    <p>IP: {{ machine.ip }}</p>
+    <p>Hostname: {{ machine.hostname }}</p>
+    <p>Port: {{ machine.port }}</p>
+    <p>Data da consulta: {{ date }}</p>
+    <br>
+    <h3>Estatísticas</h3>
+    <p>Máximo de CPU estipulado: {{ data.max_cpu }}%</p>
+    <p>Uso de CPU atual: {{ data.current_cpu }}%</p>
+    <p>Máximo de Memporia estipulado: {{ data.max_men }}%</p>
+    <p>Uso de Memória atual: {{ data.current_men }}%</p>
+    <p>Máximo de Disco estipulado: {{ data.max_disc }}%</p>
+    <p>Uso de Disco atual: {{ data.current_disc }}%</p>
+</body>
+
+</html>

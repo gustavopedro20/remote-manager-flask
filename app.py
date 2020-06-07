@@ -1,50 +1,36 @@
-from flask_cors import CORS
-from flask import Flask, request, jsonify
-from flask_socketio import SocketIO, send
 import time
+import logging
+from datetime import datetime
 
-from mod_machine.models import db, Machine
+from flask import Flask, request, jsonify
+from flask import render_template
+from flask_cors import CORS
+from flask_mail import Mail
+from flask_mail import Message
+from flask_socketio import SocketIO, send
+
+from config import mail_settings, sql_setting
+from mod_machine.dto import MailDTO
+from mod_machine.models import Machine
+from mod_machine.models import db, Config
 from mod_machine.services import SSHClient
-from mod_machine.utils.constants import convert_txt_vmstat_to_dict
 
-APP = Flask(__name__)
-CORS(APP)
-db.init_app(APP)
-APP.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-APP.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///machine.db'
-socketio = SocketIO(APP, cors_allowed_origins="*")
+app = Flask(__name__, template_folder='templates')
+app.config.update(mail_settings)
+app.config.update(sql_setting)
+db.init_app(app)
+mail = Mail(app)
+CORS(app)
+socket_io = SocketIO(app, cors_allowed_origins="*")
+logging.basicConfig(level=logging.INFO)
 
 
-@APP.route('/')
+@app.route('/')
 def index():
     return 'Hello, World!'
 
 
-@APP.route('/commands', methods=['GET'])
-def commands():
-    ssh = SSHClient()
-    response = ssh.run(request.args['command'])
-    ssh.disconnect()
-    return jsonify(response.strip().decode()), 200
-
-
-@APP.route('/swap/statistics', methods=['GET'])
-def get_cpu_statistics():
-    ssh = SSHClient()
-    local_path = ssh.get_swap_statistics()
-    ssh.disconnect()
-    return jsonify(convert_txt_vmstat_to_dict(local_path)), 200
-
-
-@APP.route('/tasks', methods=['GET'])
-def get_all_tasks():
-    ssh = SSHClient()
-    tasks, men_statistics = ssh.get_all_tasks_and_men_statistics()
-    ssh.disconnect()
-    return jsonify({'tasks': tasks, 'men': men_statistics}), 200
-
-
-@APP.route('/tasks', methods=['DELETE'])
+@app.route('/tasks', methods=['DELETE'])
 def delete_task():
     pid = request.args['pid']
     machine_id = request.args['machineId']
@@ -56,15 +42,7 @@ def delete_task():
     return jsonify(), 204
 
 
-@APP.route('/disk-usage', methods=['GET'])
-def get_disk_usage():
-    ssh = SSHClient()
-    v = ssh.get_disc_usage()
-    ssh.disconnect()
-    return jsonify(v), 200
-
-
-@socketio.on('tasks')
+@socket_io.on('tasks')
 def socket_tasks(machine_id):
     if machine_id is not None:
         machine = Machine.query.get(machine_id)
@@ -74,7 +52,7 @@ def socket_tasks(machine_id):
                                 machine.serialize['hostname'], machine.serialize['password'])
                 while True:
                     disk_usage = ssh.get_disc_usage()
-                    task_list, men_dic, cpu_usage = ssh.get_all_tasks_and_men_statistics()
+                    task_list, men_dic, cpu_usage = ssh.get_task_men_cpu()
                     response = {
                         'tasks': task_list,
                         'men': men_dic,
@@ -105,29 +83,46 @@ def socket_tasks(machine_id):
         send(response)
 
 
-@APP.route('/api/machines', methods=['POST'])
+@app.route('/api/machines', methods=['POST'])
 def create_machine():
-    data = request.get_json()
-    new_machine = Machine(ip=data['ip'],
-                          hostname=data['hostname'],
-                          password=data['password'],
-                          port=data['port'],
-                          system=data['system'])
+    machine = request.get_json()
+    new_machine = Machine(
+        ip=machine['ip'],
+        hostname=machine['hostname'],
+        password=machine['password'],
+        port=machine['port'],
+        system=machine['system']
+    )
     try:
         db.session.add(new_machine)
         db.session.commit()
-        return jsonify(), 201
     except Exception as e:
-        return jsonify({'error': e.__cause__, 'status': 500}), 500
+        return jsonify({'error': e, 'status': 500}), 500
+
+    new_config = Config(
+        maxMenInPercent=machine['config']['maxMenInPercent'],
+        maxDiscInPercent=machine['config']['maxDiscInPercent'],
+        maxCPUInPercent=machine['config']['maxCPUInPercent'],
+        email=machine['config']['email'],
+        machine_id=new_machine.id
+    )
+    try:
+        db.session.add(new_config)
+        db.session.commit()
+    except Exception as e:
+        return jsonify({'error': e, 'status': 500}), 500
+
+    response = Machine.query.get(new_machine.id)
+    return jsonify(response.serialize), 201
 
 
-@APP.route('/api/machines', methods=['GET'])
+@app.route('/api/machines', methods=['GET'])
 def find_all_machine():
     tasks = Machine.query.all()
-    return jsonify([i.serialize for i in tasks])
+    return jsonify([i.serialize for i in tasks]), 200
 
 
-@APP.route('/api/machines/<int:id>', methods=['GET'])
+@app.route('/api/machines/<int:id>', methods=['GET'])
 def find_one_machine(id):
     machine = Machine.query.get(id)
     if machine:
@@ -141,7 +136,7 @@ def find_one_machine(id):
         return jsonify(response), 404
 
 
-@APP.route('/api/machines/<int:id>', methods=['DELETE'])
+@app.route('/api/machines/<int:id>', methods=['DELETE'])
 def delete_machine(id):
     machine = Machine.query.get_or_404(id)
     try:
@@ -152,18 +147,67 @@ def delete_machine(id):
         return jsonify({'error': e.__cause__, 'status': 500}), 500
 
 
-@APP.route('/api/machines', methods=['PUT'])
+@app.route('/api/machines', methods=['PUT'])
 def update_machine():
-    machine = Machine.query.get(request.json.get('id'))
-    machine.ip = request.json.get('ip')
-    machine.hostname = request.json.get('hostname')
-    machine.port = request.json.get('port')
-    machine.system = request.json.get('system')
-    machine.password = request.json.get('password')
+    machine_update = request.get_json()
+    machine = Machine.query.get(int(machine_update['id']))
+    machine.ip = machine_update['ip']
+    machine.hostname = machine_update['hostname']
+    machine.port = machine_update['port']
+    machine.system = machine_update['system']
+    machine.password = machine_update['password']
+    config = Config.query.get(machine_update['config']['id'])
+    config.email = machine_update['config']['email']
+    config.max_disc_in_percent = machine_update['config']['maxDiscInPercent']
+    config.max_men_in_percent = machine_update['config']['maxMenInPercent']
+    config.max_cpu_in_percent = machine_update['config']['maxCPUInPercent']
     db.session.commit()
-    response = Machine.query.get(machine.id)
-    return jsonify(response.serialize), 200
+    return jsonify(machine.serialize), 200
+
+
+@app.route('/trigger', methods=['GET'])
+def verify_machine_usage():
+    machines = Machine.query.all()
+    for machine in machines:
+        ssh = SSHClient(machine.ip, machine.port, machine.hostname, machine.password)
+        if ssh.is_connected():
+            task, men, cpu = ssh.get_task_men_cpu()
+            disc = ssh.get_disc_usage()
+            ssh.disconnect()
+
+            max_cpu = machine.config.maxCPUInPercent
+            max_men = machine.config.maxMenInPercent
+            max_disc = machine.config.maxDiscInPercent
+
+            current_men = int((men['free'] * 100) / men['total'])
+            current_cpu = int(cpu)
+            current_disc = int(disc['usage_per_cent'])
+
+            if current_disc > max_disc or current_men > max_men or current_cpu > max_cpu:
+                dto = MailDTO(max_cpu, max_men, max_disc, current_men, current_cpu, current_disc)
+                send_mail_from_template(
+                    f'A máquina {machine.ip} ultrapassou os limites de uso de CPU, memória ou disco estabelecidos!',
+                    machine.config.email,
+                    'machine.html',
+                    dto=dto,
+                    machine=machine
+                )
+    return '', 200
+
+
+def send_mail_from_template(subject, recipient, template, **kwargs):
+    with app.app_context():
+        print('\n', 'send email...', '\n')
+        logging.info('Send e-mail to: {}', recipient)
+        msg = Message(subject, sender=app.config['MAIL_USERNAME'], recipients=[recipient])
+        msg.html = render_template(
+            template,
+            data=kwargs.get('dto'),
+            machine=kwargs.get('machine'),
+            date=datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        )
+        mail.send(msg)
 
 
 if __name__ == '__main__':
-    socketio.run(APP, debug=True)
+    socket_io.run(app, debug=True)
