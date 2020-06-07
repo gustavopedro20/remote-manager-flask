@@ -1,5 +1,5 @@
-import time
 import logging
+import time
 from datetime import datetime
 
 from flask import Flask, request, jsonify
@@ -44,41 +44,33 @@ def delete_task():
 
 @socket_io.on('tasks')
 def socket_tasks(machine_id):
-    if machine_id is not None:
-        machine = Machine.query.get(machine_id)
-        if machine:
-            try:
-                ssh = SSHClient(machine.serialize['ip'], machine.serialize['port'],
-                                machine.serialize['hostname'], machine.serialize['password'])
-                while True:
-                    disk_usage = ssh.get_disc_usage()
-                    task_list, men_dic, cpu_usage = ssh.get_task_men_cpu()
-                    response = {
-                        'tasks': task_list,
-                        'men': men_dic,
-                        'diskUsage': disk_usage,
-                        'cpuUsage': cpu_usage
-                    }
-                    # emit('join_room', response, broadcast=True)
-                    send(response)
-                    time.sleep(15)
-            except Exception as e:
+    machine = Machine.query.get(machine_id)
+    if machine_id is not None and machine:
+        ssh = SSHClient(machine.ip, machine.port, machine.hostname, machine.password)
+        if ssh.is_connected():
+            while True:
+                disk_usage = ssh.get_disc_usage()
+                task_list, men_dic, cpu_usage = ssh.get_task_men_cpu()
+                sorted(task_list, key=lambda i: i['PID'])
                 response = {
-                    'error': f'Cant not connect to the server: {e.__cause__}',
-                    'status': 500
+                    'tasks': task_list,
+                    'men': men_dic,
+                    'diskUsage': disk_usage,
+                    'cpuUsage': cpu_usage
                 }
                 send(response)
+                time.sleep(15)
         else:
             response = {
-                'message': 'not found',
-                'status': 404,
-                'details': 'machine not found'
+                'error': f'Cant not connect to the server {machine.ip}',
+                'status': 500
             }
             send(response)
     else:
         response = {
-            'error': 'machine id not found',
-            'status': 404
+            'message': 'not found',
+            'status': 404,
+            'details': 'machine not found'
         }
         send(response)
 
