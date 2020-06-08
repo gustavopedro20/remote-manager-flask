@@ -1,6 +1,5 @@
 import logging
 import time
-import atexit
 from datetime import datetime
 
 from flask import Flask, request, jsonify
@@ -39,8 +38,7 @@ def delete_task():
     pid = request.args['pid']
     machine_id = request.args['machineId']
     machine = Machine.query.get(machine_id)
-    ssh = SSHClient(machine.serialize['ip'], machine.serialize['port'],
-                    machine.serialize['hostname'], machine.serialize['password'])
+    ssh = SSHClient(machine.ip, machine.port, machine.hostname, machine.password)
     ssh.kill_task(pid)
     ssh.disconnect()
     return jsonify(), 204
@@ -63,7 +61,7 @@ def socket_tasks(machine_id):
                     'cpuUsage': cpu_usage
                 }
                 send(response)
-                time.sleep(15)
+                time.sleep(25)
         else:
             response = {
                 'error': f'Cant not connect to the server {machine.ip}',
@@ -178,7 +176,7 @@ def verify_machine_usage():
 
                 current_men = int((men['free'] * 100) / men['total'])
                 current_cpu = int(cpu)
-                current_disc = int(disc['usage_per_cent'])
+                current_disc = int(disc['free'] * 100 / disc['total'])
 
                 if current_disc > max_disc or current_men > max_men or current_cpu > max_cpu:
                     dto = MailDTO(max_cpu, max_men, max_disc, current_men, current_cpu, current_disc)
@@ -202,9 +200,6 @@ def send_mail_from_template(subject, recipient, template, **kwargs):
             date=datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
         )
         mail.send(msg)
-
-
-atexit.register(lambda: cron.shutdown(wait=False))
 
 
 if __name__ == '__main__':
