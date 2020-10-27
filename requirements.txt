@@ -4,7 +4,7 @@ blinker==1.4
 cffi==1.14.0
 click==7.1.1
 coloredlogs==14.0
-cryptography==2.9.2
+cryptography==3.2
 distlib==0.3.0
 dnspython==1.16.0
 docutils==0.16
@@ -50,7 +50,7 @@ blinker==1.4
 cffi==1.14.0
 click==7.1.1
 coloredlogs==14.0
-cryptography==2.9.2
+cryptography==3.2
 distlib==0.3.0
 dnspython==1.16.0
 docutils==0.16
