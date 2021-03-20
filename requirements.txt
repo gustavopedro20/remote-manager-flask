@@ -19,7 +19,7 @@ gevent==20.5.2
 greenlet==0.4.15
 humanfriendly==8.2
 itsdangerous==1.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 kivy-deps.angle==0.1.10
 kivy-deps.glew==0.1.12
 kivy-deps.gstreamer==0.1.18
@@ -65,7 +65,7 @@ gevent==20.5.2
 greenlet==0.4.15
 humanfriendly==8.2
 itsdangerous==1.1.0
-Jinja2==2.11.2
+Jinja2==2.11.3
 kivy-deps.angle==0.1.10
 kivy-deps.glew==0.1.12
 kivy-deps.gstreamer==0.1.18
