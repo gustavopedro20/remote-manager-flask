@@ -11,7 +11,7 @@ docutils==0.16
 eventlet==0.25.2
 filelock==3.0.12
 Flask==1.1.2
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 Flask-Mail==0.9.1
 Flask-SocketIO==4.3.0
 Flask-SQLAlchemy==2.4.1
@@ -57,7 +57,7 @@ docutils==0.16
 eventlet==0.25.2
 filelock==3.0.12
 Flask==1.1.2
-Flask-Cors==3.0.8
+Flask-Cors==3.0.9
 Flask-Mail==0.9.1
 Flask-SocketIO==4.3.0
 Flask-SQLAlchemy==2.4.1
